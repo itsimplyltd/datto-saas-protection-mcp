@@ -369,8 +369,10 @@ export function createMcpServer(credentialOverrides?: DattoSaasCredentials): Ser
     };
   }
 
-  async function handleToolCall(request: { params: { name: string; arguments?: unknown } }): Promise<ToolResult> {
-    const { name, arguments: args } = request.params as { name: string; arguments: any };
+  async function handleToolCall(
+    request: { params: { name: string; arguments?: Record<string, unknown> } },
+  ): Promise<ToolResult> {
+    const { name, arguments: args } = request.params;
     const creds = credentialOverrides ?? getCredentials();
 
     if (!creds) {
