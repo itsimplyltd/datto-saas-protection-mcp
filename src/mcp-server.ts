@@ -7,6 +7,7 @@
  * fresh server is created per request (for credential isolation in HTTP mode).
  */
 
+import { wrapUntrustedContent } from "./utils/untrusted-content.js";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import {
   CallToolRequestSchema,
@@ -344,8 +345,32 @@ export function createMcpServer(credentialOverrides?: DattoSaasCredentials): Ser
   // Tool call handler
   // -------------------------------------------------------------------------
 
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: args } = request.params;
+  // WRAPPED AT THE OUTERMOST POINT, deliberately. Results are returned from
+  // a dozen places inside the switch below, so marking each one would miss
+  // any tool added later - and the tool most likely to be added later is
+  // another read over client-authored directory data. One choke point here
+  // cannot be forgotten. See utils/untrusted-content.ts for which tools are
+  // marked and why the rest are not.
+  server.setRequestHandler(CallToolRequestSchema, async (request) =>
+    markUntrusted(request.params.name, await handleToolCall(request)));
+
+  type ToolResult = { content: Array<{ type: string; text?: string }>; isError?: boolean };
+
+  function markUntrusted(toolName: string, result: ToolResult): ToolResult {
+    // Errors are ours, not the upstream payload - wrapping them would put a
+    // data boundary around our own message and say nothing true.
+    if (result?.isError) return result;
+    return {
+      ...result,
+      content: (result?.content ?? []).map((block) =>
+        block?.type === 'text' && typeof block.text === 'string'
+          ? { ...block, text: wrapUntrustedContent(toolName, block.text) }
+          : block),
+    };
+  }
+
+  async function handleToolCall(request: { params: { name: string; arguments?: unknown } }): Promise<ToolResult> {
+    const { name, arguments: args } = request.params as { name: string; arguments: any };
     const creds = credentialOverrides ?? getCredentials();
 
     if (!creds) {
@@ -484,7 +509,7 @@ export function createMcpServer(credentialOverrides?: DattoSaasCredentials): Ser
         isError: true,
       };
     }
-  });
+  }
 
   return server;
 }

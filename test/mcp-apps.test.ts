@@ -12,6 +12,7 @@
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { stripUntrustedContentWrapper } from '../src/utils/untrusted-content.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createMcpServer } from '../src/mcp-server.js';
@@ -148,7 +149,7 @@ describe('MCP Apps seat card', () => {
         arguments: { seatId: activeSeat.id },
       })) as { isError?: boolean; content: Array<{ text?: string }> };
       expect(result.isError).toBeFalsy();
-      const payload = JSON.parse(result.content[0]?.text ?? '{}');
+      const payload = JSON.parse(stripUntrustedContentWrapper(result.content[0]?.text ?? '{}'));
       expect(payload.id).toBe(activeSeat.id);
       expect(payload.email).toBe(activeSeat.email);
       expect(payload._card).toEqual({
@@ -170,7 +171,7 @@ describe('MCP Apps seat card', () => {
         arguments: { seatId: 'whatever' },
       })) as { isError?: boolean; content: Array<{ text?: string }> };
       expect(result.isError).toBeFalsy();
-      const payload = JSON.parse(result.content[0]?.text ?? '{}');
+      const payload = JSON.parse(stripUntrustedContentWrapper(result.content[0]?.text ?? '{}'));
       expect(payload.unexpected).toBe('shape');
       expect(payload._card).toBeUndefined();
     });
