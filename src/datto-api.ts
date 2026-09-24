@@ -17,8 +17,9 @@
  * `/clients/{id}/domains`, `/seats/{id}`, `/seats/{id}/backups`,
  * `/restores/{id}`, `/clients/{id}/activity`, `/clients/{id}/usage`) were
  * written against a speculative spec — its own CHANGELOG says so — and all of
- * them 404. The SDK's error taxonomy is correct and publicly exported, so it is
- * reused here and remains the error contract for callers.
+ * them 404. Its error taxonomy was sound, so it is reproduced below under the
+ * same names - the error contract for callers is unchanged - and the SDK itself
+ * is no longer a dependency.
  *
  * Read-only by construction: there is no method on this client that can issue
  * anything but a GET, so the one write route the API does have
@@ -26,14 +27,68 @@
  * cannot be reached through it even by accident.
  */
 
-import {
-  DattoSaasProtectionAuthenticationError,
-  DattoSaasProtectionError,
-  DattoSaasProtectionForbiddenError,
-  DattoSaasProtectionNotFoundError,
-  DattoSaasProtectionRateLimitError,
-  DattoSaasProtectionServerError,
-} from "@wyre-technology/node-datto-saas-protection";
+// ---------------------------------------------------------------------------
+// Errors — the same names and constructor signatures as the WYRE SDK this
+// client used to import them from, so every message and `instanceof` check a
+// caller relies on is unchanged. Defined here because they were the only thing
+// still taken from that SDK, and keeping it meant a private-registry token in
+// every install, CI run and image build. datto-bcdr-mcp made the same move.
+// ---------------------------------------------------------------------------
+
+export class DattoSaasProtectionError extends Error {
+  readonly statusCode: number;
+  readonly response: unknown;
+  constructor(message: string, statusCode = 0, response?: unknown) {
+    super(message);
+    this.name = "DattoSaasProtectionError";
+    this.statusCode = statusCode;
+    this.response = response;
+    Object.setPrototypeOf(this, DattoSaasProtectionError.prototype);
+  }
+}
+
+export class DattoSaasProtectionAuthenticationError extends DattoSaasProtectionError {
+  constructor(message: string, statusCode = 401, response?: unknown) {
+    super(message, statusCode, response);
+    this.name = "DattoSaasProtectionAuthenticationError";
+    Object.setPrototypeOf(this, DattoSaasProtectionAuthenticationError.prototype);
+  }
+}
+
+export class DattoSaasProtectionForbiddenError extends DattoSaasProtectionError {
+  constructor(message: string, response?: unknown) {
+    super(message, 403, response);
+    this.name = "DattoSaasProtectionForbiddenError";
+    Object.setPrototypeOf(this, DattoSaasProtectionForbiddenError.prototype);
+  }
+}
+
+export class DattoSaasProtectionNotFoundError extends DattoSaasProtectionError {
+  constructor(message: string, response?: unknown) {
+    super(message, 404, response);
+    this.name = "DattoSaasProtectionNotFoundError";
+    Object.setPrototypeOf(this, DattoSaasProtectionNotFoundError.prototype);
+  }
+}
+
+export class DattoSaasProtectionRateLimitError extends DattoSaasProtectionError {
+  /** Suggested retry delay in milliseconds (parsed from Retry-After). */
+  readonly retryAfter: number;
+  constructor(message: string, retryAfter = 5000, response?: unknown) {
+    super(message, 429, response);
+    this.name = "DattoSaasProtectionRateLimitError";
+    this.retryAfter = retryAfter;
+    Object.setPrototypeOf(this, DattoSaasProtectionRateLimitError.prototype);
+  }
+}
+
+export class DattoSaasProtectionServerError extends DattoSaasProtectionError {
+  constructor(message: string, statusCode = 500, response?: unknown) {
+    super(message, statusCode, response);
+    this.name = "DattoSaasProtectionServerError";
+    Object.setPrototypeOf(this, DattoSaasProtectionServerError.prototype);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Contract constants — the single source of truth for host and paths

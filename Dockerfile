@@ -9,15 +9,14 @@ WORKDIR /app
 
 COPY package*.json ./
 
-# Install dependencies using Docker build secret for GitHub Packages auth
-RUN --mount=type=secret,id=npmrc,target=/root/.npmrc npm ci --ignore-scripts
+RUN npm ci --ignore-scripts
 
 COPY . .
 
 RUN npm run build
 
-# Prune dev dependencies in builder stage (must happen here while npmrc secret is available)
-RUN --mount=type=secret,id=npmrc,target=/root/.npmrc npm prune --omit=dev
+# Prune dev dependencies in the builder stage
+RUN npm prune --omit=dev
 
 # Production stage
 FROM node:26-alpine AS production

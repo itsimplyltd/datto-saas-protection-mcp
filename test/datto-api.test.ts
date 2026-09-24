@@ -16,20 +16,18 @@ import {
   DATTO_API_BASE_URL,
   DOMAINS_PATH,
   DattoSaasApi,
-  SEAT_TYPES,
-  backupReportPath,
-  seatsPath,
-  type SaasDomain,
-  type SaasSeat,
-} from '../src/datto-api.js';
-import {
   DattoSaasProtectionAuthenticationError,
   DattoSaasProtectionError,
   DattoSaasProtectionForbiddenError,
   DattoSaasProtectionNotFoundError,
   DattoSaasProtectionRateLimitError,
   DattoSaasProtectionServerError,
-} from '@wyre-technology/node-datto-saas-protection';
+  SEAT_TYPES,
+  backupReportPath,
+  seatsPath,
+  type SaasDomain,
+  type SaasSeat,
+} from '../src/datto-api.js';
 
 const fetchMock = vi.fn();
 

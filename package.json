@@ -45,8 +45,7 @@
   },
   "homepage": "https://github.com/WYRE-AI/datto-saas-protection-mcp#readme",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
-    "@wyre-technology/node-datto-saas-protection": "^2.0.1"
+    "@modelcontextprotocol/sdk": "^1.30.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -66,8 +65,5 @@
   },
   "engines": {
     "node": ">=20.0.0"
-  },
-  "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
   }
 }
