@@ -11,7 +11,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DattoSaasApi, DattoSaasProtectionError } from '../src/datto-api.js';
+import { DattoSaasApi, DattoSaasProtectionError, isSeatListingUnavailable } from '../src/datto-api.js';
 
 const fetchMock = vi.fn();
 
@@ -61,5 +61,27 @@ describe('get: non-JSON 200 response', () => {
     fetchMock.mockResolvedValue(htmlResponse('<html>maintenance</html>'));
     await expect(api().listDomains()).rejects.toBeInstanceOf(DattoSaasProtectionError);
     await expect(api().listDomains()).rejects.toThrow(/non-JSON/);
+  });
+});
+
+describe('get: a timeout while reading the body stays a timeout', () => {
+  it('propagates a TimeoutError from response.json() unchanged, not as "malformed JSON"', async () => {
+    const timeoutError = new DOMException('The operation was aborted', 'TimeoutError');
+    const stubResponse = {
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: () => Promise.reject(timeoutError),
+      clone() {
+        return this;
+      },
+    };
+    fetchMock.mockResolvedValue(stubResponse as unknown as Response);
+
+    await expect(api().listDomains()).rejects.toBe(timeoutError);
+    const error = await api()
+      .listDomains()
+      .catch((e: unknown) => e);
+    expect(isSeatListingUnavailable(error)).toBe(true);
   });
 });

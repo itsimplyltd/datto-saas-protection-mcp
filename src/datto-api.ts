@@ -370,7 +370,12 @@ export class DattoSaasApi {
     }
     try {
       return (await response.json()) as T;
-    } catch {
+    } catch (error) {
+      // An AbortSignal.timeout firing mid-body-read surfaces here as
+      // response.json() rejecting - it must stay a timeout
+      // (isSeatListingUnavailable relies on the DOMException surviving
+      // unchanged), not get relabelled as a malformed JSON body.
+      if (error instanceof DOMException && error.name === "TimeoutError") throw error;
       throw new DattoSaasProtectionError(
         `Datto returned a malformed JSON body for GET ${path}`,
         response.status
