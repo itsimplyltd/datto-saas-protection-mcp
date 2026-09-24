@@ -1,7 +1,9 @@
 # Datto SaaS Protection MCP Server
 
-[![CI](https://github.com/WYRE-AI/datto-saas-protection-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/WYRE-AI/datto-saas-protection-mcp/actions/workflows/ci.yml)
+[![CI](https://github.com/itsimplyltd/datto-saas-protection-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/itsimplyltd/datto-saas-protection-mcp/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
+Forked from [WYRE-AI/datto-saas-protection-mcp](https://github.com/WYRE-AI/datto-saas-protection-mcp) (Apache-2.0); the API layer has since been rewritten against Datto's live API.
 
 A [Model Context Protocol](https://modelcontextprotocol.io) server exposing the
 [Datto SaaS Protection (Backupify)](https://www.datto.com/products/saas-protection/)
@@ -62,7 +64,7 @@ export DATTO_SAAS_SECRET_KEY="..."
 
 ### Hosted (gateway mode)
 
-The WYRE MCP Gateway injects credentials per request via headers:
+The IT Simply MCP gateway (cred-router) injects credentials per request via headers:
 
 - `X-Datto-SaaS-Public-Key` (required, secret)
 - `X-Datto-SaaS-Secret-Key` (required, secret)

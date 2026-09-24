@@ -1,4 +1,4 @@
-# Canonical Dependabot config for the WYRE-AI *-mcp / node-* fleet.
+# Dependabot config for this repo (datto-saas-protection-mcp).
 #
 # Goal: keep PR volume manageable for a small team. Updates are GROUPED so a
 # repo gets a handful of PRs per week instead of one-per-package, and the

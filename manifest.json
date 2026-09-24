@@ -5,9 +5,9 @@
   "version": "0.0.0",
   "description": "MCP server for Datto SaaS Protection (Backupify) - read M365/GWS backup posture, seats and license usage through AI assistants",
   "long_description": "Provides AI assistants with read-only, structured access to your Datto SaaS Protection (Backupify) tenant. List the customers and protected domains your API key covers, browse seats for Microsoft 365 and Google Workspace, and pull per-customer backup, storage and license usage reports through the Model Context Protocol.",
-  "author": { "name": "Wyre Technology", "url": "https://github.com/WYRE-AI" },
-  "repository": { "type": "git", "url": "https://github.com/WYRE-AI/datto-saas-protection-mcp" },
-  "homepage": "https://github.com/WYRE-AI/datto-saas-protection-mcp",
+  "author": { "name": "IT Simply Ltd", "url": "https://github.com/itsimplyltd" },
+  "repository": { "type": "git", "url": "https://github.com/itsimplyltd/datto-saas-protection-mcp" },
+  "homepage": "https://github.com/itsimplyltd/datto-saas-protection-mcp",
   "license": "Apache-2.0",
   "keywords": ["datto", "saas-protection", "backupify", "m365", "google-workspace", "msp", "kaseya"],
   "server": {
