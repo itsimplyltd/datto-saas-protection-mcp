@@ -120,8 +120,21 @@ export function backupReportPath(saasCustomerId: string | number): string {
   return `/v1/saas/${encodeURIComponent(String(saasCustomerId))}/applications`;
 }
 
-/** Default per-request timeout. */
-const DEFAULT_TIMEOUT_MS = 30_000;
+/**
+ * Default per-request timeout. DELIBERATELY LARGE - do not "tidy" it.
+ *
+ * Measured against a real partner tenant on 2026-09-21:
+ *   GET /v1/saas/domains               ~34s
+ *   GET /v1/saas/{id}/applications     ~19s
+ *   GET /v1/saas/{id}/seats            38-60s, then a 504 from Datto's edge
+ *
+ * The 30s this used to be cut off /saas/domains - the call every other tool
+ * depends on - before it could answer, and a 25-30s timeout once made a
+ * working key pair look like bad credentials. 90s sits above Datto's own 504
+ * edge, so a real Datto 504 arrives as a 504 (which the seats tool knows how
+ * to degrade from) instead of being disguised as our own abort.
+ */
+export const DEFAULT_TIMEOUT_MS = 90_000;
 
 // ---------------------------------------------------------------------------
 // Response types — field names and types taken from Datto's schema
