@@ -537,6 +537,100 @@ git push origin main
 
 ---
 
+### Task 3a: Non-billable seats are `""`, not `"0"`
+
+*Added 2026-09-24 from Task 3's live probe.* Datto documents `billable` as `"1"`/`"0"`, but across a live seat list the values seen were `"1"` and `""` — never `"0"`. The seat card maps only `"1"` and `"0"`, so every non-billable seat renders with **no billing line at all**: a silent omission, not an error. Datto documents a two-valued flag and only two values appear, so `""` is its falsy serialisation.
+
+**Files:**
+- Modify: `src/seat-card.ts` — the billable mapping inside `buildSeatCard`
+- Modify: `src/datto-api.ts` — the doc comment on `SaasSeat.billable`
+- Test: `test/seat-card-billable.test.ts` (create)
+
+**Interfaces:**
+- Consumes: `buildSeatCard(seat: Partial<SaasSeat> | null | undefined): SeatCard | null` from `src/seat-card.ts` (unchanged signature)
+
+- [ ] **Step 1: Write the failing test**
+
+Create `test/seat-card-billable.test.ts`:
+
+```ts
+import { describe, it, expect } from 'vitest';
+import { buildSeatCard } from '../src/seat-card.js';
+
+const seat = { mainId: 'dana@acme.co.nz', name: 'Dana', seatType: 'User', seatState: 'Active' };
+
+// Observed live on 2026-09-24: billable is "1" or "" - never the "0" Datto
+// documents. Mapping only "1"/"0" left every non-billable seat with no
+// billing line at all.
+describe('seat card billing', () => {
+  it.each([
+    ['1', 'Billable'],
+    ['', 'Not billable'],
+    ['0', 'Not billable'],
+  ])('billable %j renders as %s', (billable, billing) => {
+    expect(buildSeatCard({ ...seat, billable })?.billing).toBe(billing);
+  });
+
+  it('shows nothing when the flag is absent or unrecognised', () => {
+    expect(buildSeatCard(seat)?.billing).toBeUndefined();
+    expect(buildSeatCard({ ...seat, billable: 'maybe' })?.billing).toBeUndefined();
+  });
+});
+```
+
+- [ ] **Step 2: Run to see it fail**
+
+Run: `npx vitest run test/seat-card-billable.test.ts`
+Expected: FAIL on `billable "" renders as Not billable` (received `undefined`). The other cases pass already.
+
+- [ ] **Step 3: Implement**
+
+In `src/seat-card.ts`, replace
+
+```ts
+  // Datto sends `billable` as the string "1" / "0".
+  if (seat.billable === "1") card.billing = "Billable";
+  else if (seat.billable === "0") card.billing = "Not billable";
+```
+
+with
+
+```ts
+  // Datto documents `billable` as the string "1" / "0", but the live API sends
+  // "1" and "" - an empty string for not billable (observed 2026-09-24; "0"
+  // never appeared). Both falsy forms map to "Not billable"; anything else
+  // shows no billing line rather than guessing.
+  if (seat.billable === "1") card.billing = "Billable";
+  else if (seat.billable === "" || seat.billable === "0") card.billing = "Not billable";
+```
+
+In `src/datto-api.ts`, replace the `SaasSeat.billable` doc comment
+
+```ts
+  /** `"1"` / `"0"` — a string in the live API, not a boolean. */
+```
+
+with
+
+```ts
+  /** A string, not a boolean: `"1"` when billable, `""` when not (live, 2026-09-24 - Datto's docs say `"0"`, which never appeared). */
+```
+
+- [ ] **Step 4: Run the tests**
+
+Run: `npx vitest run test/seat-card-billable.test.ts && npm run typecheck && npm run lint && npm test`
+Expected: PASS, whole suite green.
+
+- [ ] **Step 5: Commit and push**
+
+```bash
+git add src/seat-card.ts src/datto-api.ts test/seat-card-billable.test.ts
+git commit   # why: live data sends "" for not billable, so non-billable seats silently lost their billing line
+git push origin main
+```
+
+---
+
 ### Task 4: Raise the timeout above Datto's real latency
 
 **Files:**

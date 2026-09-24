@@ -199,6 +199,24 @@ Two findings came from upstream's own fix and are **not yet verified by us**:
 Confirm both against one live call before relying on them. The same org invented
 the first version of this client.
 
+**Verified 2026-09-24 against the live API** (read-only probe; shapes and types
+recorded, no client data):
+
+- `saasCustomerId` is a **number** on all 42 domain records. Branch type correct.
+- `billable` is a **string**, but the values seen were `"1"` and **`""`** — never
+  the `"0"` Datto documents. The seat card mapped only `"1"`/`"0"`, so every
+  non-billable seat would have rendered with no billing line at all. Fixed as
+  plan Task 3a.
+- The backup report's `suites` entries are
+  `{ suiteType, appTypes: [{ appType, backupHistory[], lastFullyProtectedTime,
+  uningestedServiceCount, usedBytes }] }`, and `backupHistory` holds service
+  counts, time windows and a status. No directory text, so
+  `datto_saas_get_backup_report` stays **unmarked**.
+- `/applications` returned a single `{ pagination, items }` envelope, not the
+  array the contract declares. The branch client already accepts both.
+- Every customer in this tenant has exactly one domain record, and
+  `/saas/domains` answered in 20.7s on this run.
+
 ## Testing
 
 The branch's `test/datto-api.test.ts` (383 lines) mocks `fetch` itself and pins
