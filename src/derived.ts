@@ -126,3 +126,44 @@ export function findSeat(seats: SaasSeat[], seatId: string): SaasSeat | undefine
       seat.mainId?.toLowerCase() === needle || seat.remoteId?.toLowerCase() === needle
   );
 }
+
+/**
+ * Said to the caller whenever seat detail is replaced by a count. It is part
+ * of the tool's contract, not a log line: the caller is a language model, and
+ * without an explanation it will report a missing list as though the
+ * customer had no seats.
+ */
+export const SEATS_UNAVAILABLE_NOTE =
+  "Per-seat detail unavailable: Datto's seats endpoint times out above ~25-40 seats. " +
+  "Count is from the domain record.";
+
+export interface DegradedSeatListing {
+  saasCustomerId: string | number;
+  seatsUsed: number;
+  seatDetail: null;
+  domains: Array<{ domain?: string; productType?: string; seatsUsed?: number }>;
+  note: string;
+}
+
+/**
+ * What datto_saas_list_seats returns when Datto cannot list the seats. Seats
+ * are customer-scoped but seatsUsed lives on each domain record, and one
+ * customer can hold several (an M365 domain and a Google domain, say), so
+ * this totals them and lists them.
+ */
+export function degradedSeatListing(
+  domains: SaasDomain[],
+  saasCustomerId: string | number,
+  seatTypeFilterIgnored: boolean
+): DegradedSeatListing {
+  const mine = domains.filter((d) => matchesCustomer(d, saasCustomerId));
+  return {
+    saasCustomerId,
+    seatsUsed: mine.reduce((total, d) => total + (d.seatsUsed ?? 0), 0),
+    seatDetail: null,
+    domains: mine.map((d) => ({ domain: d.domain, productType: d.productType, seatsUsed: d.seatsUsed })),
+    note: seatTypeFilterIgnored
+      ? `${SEATS_UNAVAILABLE_NOTE} The count covers every seat type; the seatType filter could not be applied.`
+      : SEATS_UNAVAILABLE_NOTE,
+  };
+}

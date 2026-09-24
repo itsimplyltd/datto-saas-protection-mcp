@@ -22,8 +22,8 @@ import {
   ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { elicitSelection } from "./utils/elicitation.js";
-import { SEAT_TYPES, type DattoSaasApi } from "./datto-api.js";
-import { deriveCustomers, deriveLicenseUsage, findSeat, matchesCustomer } from "./derived.js";
+import { SEAT_TYPES, isSeatListingUnavailable, type DattoSaasApi } from "./datto-api.js";
+import { deriveCustomers, deriveLicenseUsage, degradedSeatListing, findSeat, matchesCustomer } from "./derived.js";
 import {
   createClient,
   getCredentials,
@@ -95,7 +95,8 @@ export function createMcpServer(credentialOverrides?: DattoSaasCredentials): Ser
         {
           name: "datto_saas_list_seats",
           description:
-            "List a customer's seats — mailboxes, sites, teams and drives (GET /v1/saas/{saasCustomerId}/seats). Seats are customer-scoped, not domain-scoped.",
+            "List a customer's seats — mailboxes, sites, teams and drives (GET /v1/saas/{saasCustomerId}/seats). Seats are customer-scoped, not domain-scoped." +
+            " For large customers Datto cannot list seats in time; the result is then a seat count from the domain record with seatDetail null and a note explaining why.",
           inputSchema: {
             type: "object",
             properties: {
@@ -319,7 +320,27 @@ export function createMcpServer(credentialOverrides?: DattoSaasCredentials): Ser
           };
           const saasCustomerId = await resolveSaasCustomerId(api, params.saasCustomerId);
           if (saasCustomerId === null) return failure("Error: saasCustomerId is required.");
-          return json(await api.listSeats(saasCustomerId, { seatType: params.seatType }));
+
+          try {
+            return json(await api.listSeats(saasCustomerId, { seatType: params.seatType }));
+          } catch (error) {
+            // Anything but "Datto could not list them in time" is a real
+            // failure, and goes to the outer catch as itself.
+            if (!isSeatListingUnavailable(error)) throw error;
+
+            const listing = degradedSeatListing(
+              await api.listDomains(),
+              saasCustomerId,
+              (params.seatType?.length ?? 0) > 0
+            );
+            if (listing.domains.length === 0) {
+              return failure(
+                `Error: Datto's seats endpoint timed out for customer ${saasCustomerId}, ` +
+                  "and no domain record for that customer was found to fall back on."
+              );
+            }
+            return json(listing);
+          }
         }
 
         case "datto_saas_get_seat": {

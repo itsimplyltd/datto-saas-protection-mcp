@@ -433,3 +433,21 @@ async function readBody(response: Response): Promise<unknown> {
     }
   }
 }
+
+/**
+ * True when a seat listing failed because Datto could not produce it in time,
+ * which is what happens above roughly 25-40 seats: the backend query behind
+ * /saas/{id}/seats outlasts Datto's own 60s edge and comes back as a 504.
+ * Paging does not help (_perPage=25 still 504s), so this is a limit of the
+ * endpoint, not of our client.
+ *
+ * Exactly two things count: a 504 from Datto, and our own AbortSignal.timeout
+ * firing. Everything else - 401, 403, 404, other 5xx - means something is
+ * actually wrong and must reach the caller as itself rather than being
+ * papered over with a count.
+ */
+export function isSeatListingUnavailable(error: unknown): boolean {
+  if (error instanceof DOMException && error.name === "TimeoutError") return true;
+  if (error instanceof DattoSaasProtectionServerError) return error.statusCode === 504;
+  return false;
+}
