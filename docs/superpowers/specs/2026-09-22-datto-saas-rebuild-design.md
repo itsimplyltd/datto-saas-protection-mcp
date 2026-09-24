@@ -121,13 +121,23 @@ On 504 or timeout, fall back to `seatsUsed` from `/saas/domains` and return:
 
 ```
 {
-  domain: "acme.co.nz",
+  saasCustomerId: 53124,
   seatsUsed: 214,
   seatDetail: null,
+  domains: [{ domain: "acme.co.nz", productType: "Office365", seatsUsed: 214 }],
   note: "Per-seat detail unavailable: Datto's seats endpoint times out above
          ~25-40 seats. Count is from the domain record."
 }
 ```
+
+`seatsUsed` is the total across the customer's domain records, and `domains`
+lists them, because a seat listing is customer-scoped while `seatsUsed` lives on
+the domain — one customer can hold more than one domain record. (Refined
+2026-09-24 from the single-domain shape first sketched.)
+
+"504 or timeout" means precisely: a `DattoSaasProtectionServerError` carrying
+status 504, or the `DOMException` named `TimeoutError` that `AbortSignal.timeout`
+raises. Nothing else degrades — a 401 or 403 must still surface as itself.
 
 A technician gets a number and a reason, never a bare vendor error. The note is
 part of the contract, not a log line — the caller is a language model that will
@@ -144,8 +154,30 @@ This repo's recurring failure mode is the silent one: `list_assets` once reporte
 zero assets for a device with two because the library did `response.items ?? []`
 against a response shaped `{"0":…,"1":…}`. A green build is not evidence.
 
-Add a test that asserts **every** registered tool's result comes back wrapped,
-enumerated from the server's own tool list rather than a hardcoded array.
+**Corrected 2026-09-24 — the wrapper is selective by design, not universal.**
+An earlier version of this section said to assert that *every* tool's result
+comes back wrapped. That would have undone a deliberate decision:
+`UNTRUSTED_CONTENT_TOOLS` in `src/utils/untrusted-content.ts` marks only the
+tools that carry client-directory free text, and its comment says why —
+"marking every tool trains a reader to stop noticing the marker".
+
+The real risk across a 9-to-7 rename is that **set going stale**: naming tools
+that no longer exist, and silently leaving new ones unclassified. So the test
+asserts instead that:
+
+1. every registered tool is classified — either in `UNTRUSTED_CONTENT_TOOLS` or
+   in an explicit, exported `TRUSTED_CONTENT_TOOLS` set, so a new tool fails the
+   test until somebody decides which it is
+2. no name in either set is unregistered, so a deleted tool cannot linger
+3. end to end through the server, a marked tool's result comes back wrapped and
+   an unmarked one's does not — which is what proves the choke point survived
+
+Classification for the new surface: `list_seats`, `get_seat`, `list_activity`
+stay marked. `get_backup_report` is **unmarked**, joining `list_clients`,
+`list_domains` and `get_license_usage` — its known fields are IT Simply-configured
+names and byte counts. REVISIT: its `suites` field is typed `unknown[]` and has
+never been seen in a live response; the schema check below looks at it, and if it
+carries directory data the tool moves into the marked set.
 
 ## Verify before trusting the schemas
 
@@ -174,16 +206,27 @@ every tool is deleted. The branch rewrites it; do not restore the old form.
 
 ## Gateway follow-on (separate repo)
 
-`cred-router/src/index.js:459` lists `datto_saas_queue_restore` in
-`MUTATION_TOOL_NAMES`, with a comment calling it a worked example of a
-destructive tool the verb pattern cannot see. That tool stops existing, and
-because the new client is read-only by construction there is no mutating SaaS
-tool to re-point at — so the example must move to a real mutating tool from
-another vendor. `cred-router/test/circuitBreaker.test.js:229` asserts on it too.
+`cred-router/src/index.js` lists `datto_saas_queue_restore` in
+`MUTATION_TOOL_NAMES`, with a comment saying it "writes a backup back over a
+client's live mailbox". That is untrue — Datto has no restore endpoint — and
+`cred-router/test/circuitBreaker.test.js` asserts on the name.
+
+**Corrected 2026-09-24.** An earlier version said to re-point the entry at a
+real mutating tool from another vendor. Checked: there isn't one. Every mutating
+tool across the six live vendors already matches `MUTATION_VERB_PATTERN`
+(`create`, `update`, `run`, `resolve`, `dial`, `set`, …). So the resolution is:
+
+- **keep the entry.** Upstream's published server still ships a tool with that
+  exact name. Our fork drops it, but anyone importing upstream's image instead
+  of building ours would put it back behind the gateway, and its name carries no
+  recognised verb. The entry now guards that case, and the comment says so
+  honestly rather than claiming the tool works.
+- **replace the name-specific test with an invariant**: every name in the set
+  must evade the verb pattern (otherwise the entry is redundant) and must be
+  classified as a mutation. That tests the mechanism, not one example of it.
 
 **The mechanism stays.** A vendor can absolutely name a destructive tool without
-using a recognised verb; only the worked example is wrong. Do not delete the
-exception mechanism to make the reference go away.
+using a recognised verb. Do not delete it to make the reference go away.
 
 ## Out of scope
 
