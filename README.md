@@ -10,9 +10,8 @@ API to Claude and other MCP clients.
 ## What it does
 
 Surface SaaS backup posture for your M365 and Google Workspace tenants directly
-to AI assistants — list the customers your API key protects, inspect their
-domains, seats and backup/storage reports, and audit the partner portal
-activity log.
+to AI assistants — list the customers your API key protects, and inspect their
+domains, seats and backup/storage reports.
 
 - **Interactive Seat Card (MCP Apps)**: `datto_saas_get_seat` renders as an interactive card in MCP Apps hosts (Claude Desktop/web) — read-only, showing seat type, state, billing and protection start date; neutral by default, brandable via `window.__BRAND__` injection or `MCP_BRAND_*` env vars; plain-JSON behavior is unchanged in other hosts
 
@@ -26,10 +25,10 @@ Basic auth (public key as username, secret key as password):
 | `GET https://api.datto.com/v1/saas/domains` | `list_domains`, `list_clients`, `get_license_usage` |
 | `GET https://api.datto.com/v1/saas/{saasCustomerId}/seats` | `list_seats`, `get_seat` |
 | `GET https://api.datto.com/v1/saas/{saasCustomerId}/applications` | `get_backup_report` |
-| `GET https://api.datto.com/v1/report/activity-log` | `list_activity` |
 
-There is **no** regional host split, no `/clients` route, no per-seat route and
-no restore API. Seats are scoped by `saasCustomerId`, not by domain. The host
+There is **no** regional host split, no `/clients` route, no per-seat route,
+no partner-wide activity log exposed by this server, and no restore API.
+Seats are scoped by `saasCustomerId`, not by domain. The host
 and paths are pinned by wire-contract tests in `test/datto-api.test.ts`.
 
 This server is read-only: the client exposes no method capable of issuing
@@ -46,7 +45,6 @@ cannot be reached through it.
 | `datto_saas_list_seats` | A customer's seats — mailboxes, sites, teams, drives — optionally filtered by seat type |
 | `datto_saas_get_seat` | One seat by `mainId` (usually an email) or `remoteId` |
 | `datto_saas_get_backup_report` | A customer's backup/storage report — protected suites and bytes used |
-| `datto_saas_list_activity` | Partner portal activity log, filterable by client, user and look-back window |
 | `datto_saas_get_license_usage` | Seats used per customer, broken down by subscription and product type |
 
 ## Credentials

@@ -10,12 +10,11 @@ describe('Datto SaaS Protection MCP Server', () => {
       'datto_saas_list_seats',
       'datto_saas_get_seat',
       'datto_saas_get_backup_report',
-      'datto_saas_list_activity',
       'datto_saas_get_license_usage',
     ];
 
-    it('should define all 7 tools', () => {
-      expect(expectedTools).toHaveLength(7);
+    it('should define all 6 tools', () => {
+      expect(expectedTools).toHaveLength(6);
     });
 
     it('should include client + domain tools', () => {
@@ -32,8 +31,7 @@ describe('Datto SaaS Protection MCP Server', () => {
       expect(expectedTools).toContain('datto_saas_get_backup_report');
     });
 
-    it('should include activity + license tools', () => {
-      expect(expectedTools).toContain('datto_saas_list_activity');
+    it('should include the license usage tool', () => {
       expect(expectedTools).toContain('datto_saas_get_license_usage');
     });
 

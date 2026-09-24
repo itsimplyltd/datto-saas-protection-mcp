@@ -28,7 +28,6 @@ describe('untrusted content marking', () => {
   it('marks the tools that return directory-authored text', () => {
     expect([...UNTRUSTED_CONTENT_TOOLS].sort()).toEqual([
       'datto_saas_get_seat',
-      'datto_saas_list_activity',
       'datto_saas_list_seats',
     ]);
   });

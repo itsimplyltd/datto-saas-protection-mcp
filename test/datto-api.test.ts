@@ -12,7 +12,6 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  ACTIVITY_LOG_PATH,
   DATTO_API_BASE_URL,
   DOMAINS_PATH,
   DattoSaasApi,
@@ -105,11 +104,10 @@ describe('API contract constants', () => {
     expect(DOMAINS_PATH).toBe('/v1/saas/domains');
     expect(seatsPath(53124)).toBe('/v1/saas/53124/seats');
     expect(backupReportPath(53124)).toBe('/v1/saas/53124/applications');
-    expect(ACTIVITY_LOG_PATH).toBe('/v1/report/activity-log');
   });
 
   it('never uses the 404 routes the previous client called', () => {
-    const paths = [DOMAINS_PATH, seatsPath(1), backupReportPath(1), ACTIVITY_LOG_PATH];
+    const paths = [DOMAINS_PATH, seatsPath(1), backupReportPath(1)];
     for (const path of paths) {
       expect(path).not.toContain('/api/v1/');
       expect(path).not.toContain('/clients');
@@ -267,46 +265,6 @@ describe('GET /v1/saas/{saasCustomerId}/applications', () => {
   });
 });
 
-describe('GET /v1/report/activity-log', () => {
-  it('uses Datto underscore-prefixed pagination params', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ items: [] }));
-    await api().listActivity({ clientName: 'Pruden', since: 5, sinceUnits: 'days', page: 2, perPage: 50 });
-    const url = new URL(requestedUrl());
-    expect(url.origin + url.pathname).toBe('https://api.datto.com/v1/report/activity-log');
-    expect(url.searchParams.get('clientName')).toBe('Pruden');
-    expect(url.searchParams.get('since')).toBe('5');
-    expect(url.searchParams.get('sinceUnits')).toBe('days');
-    expect(url.searchParams.get('_page')).toBe('2');
-    expect(url.searchParams.get('_perPage')).toBe('50');
-  });
-
-  it('passes the documented target tuple filter through', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ items: [] }));
-    await api().listActivity({ target: 'bcdr-device:ABC123', targetType: 'bcdr-device' });
-    const url = new URL(requestedUrl());
-    expect(url.searchParams.get('target')).toBe('bcdr-device:ABC123');
-    expect(url.searchParams.get('targetType')).toBe('bcdr-device');
-  });
-
-  it('sends no query string when unfiltered', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ items: [] }));
-    await api().listActivity();
-    expect(requestedUrl()).toBe('https://api.datto.com/v1/report/activity-log');
-  });
-
-  it('parses the paginated envelope', async () => {
-    fetchMock.mockResolvedValue(
-      jsonResponse({
-        pagination: { page: 1, perPage: 25, totalPages: 3, count: 25 },
-        items: [{ timestamp: '2018-08-28T19:00:16+00:00', action: 'protectedSystem.deleted', success: true }],
-      })
-    );
-    const page = await api().listActivity();
-    expect(page.pagination?.totalPages).toBe(3);
-    expect(page.items?.[0].action).toBe('protectedSystem.deleted');
-  });
-});
-
 describe('read-only by construction', () => {
   it('exposes no method that can issue a write', () => {
     const client = api() as unknown as Record<string, unknown>;
@@ -326,7 +284,6 @@ describe('read-only by construction', () => {
     await client.listDomains();
     await client.listSeats(1);
     await client.getBackupReport(1);
-    await client.listActivity();
     for (const call of fetchMock.mock.calls) {
       expect((call[1] as RequestInit).method).toBe('GET');
       expect((call[1] as RequestInit).body).toBeUndefined();

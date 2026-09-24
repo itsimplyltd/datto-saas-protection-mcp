@@ -9,7 +9,6 @@
  *   GET /v1/saas/domains                        -> SaasDomain[]
  *   GET /v1/saas/{saasCustomerId}/seats         -> SaasSeat[]
  *   GET /v1/saas/{saasCustomerId}/applications  -> SaasBackupReport[]
- *   GET /v1/report/activity-log                 -> ActivityLogPage
  *
  * This module deliberately does NOT use the resource layer of
  * `@wyre-technology/node-datto-saas-protection`. That SDK's base URL and Basic
@@ -107,9 +106,6 @@ export const DATTO_API_BASE_URL = "https://api.datto.com";
 /** All protected domains visible to the key, across every SaaS customer. */
 export const DOMAINS_PATH = "/v1/saas/domains";
 
-/** Partner-portal activity log (Reporting surface, shares host and auth). */
-export const ACTIVITY_LOG_PATH = "/v1/report/activity-log";
-
 /** Seats for one SaaS Protection customer. */
 export function seatsPath(saasCustomerId: string | number): string {
   return `/v1/saas/${encodeURIComponent(String(saasCustomerId))}/seats`;
@@ -204,40 +200,6 @@ export interface SaasBackupReport {
   items?: BackupReportItem[];
 }
 
-export interface ActivityLogEntry {
-  timestamp?: string;
-  requestId?: string;
-  targetType?: string;
-  targetId?: string;
-  targetDisplayName?: string;
-  clientName?: string | null;
-  interface?: string;
-  user?: string;
-  userRoles?: string[];
-  ipAddress?: string;
-  action?: string;
-  messageEN?: string;
-  success?: boolean;
-}
-
-export interface ActivityLogPage {
-  pagination?: Pagination;
-  items?: ActivityLogEntry[];
-}
-
-export interface ActivityLogParams {
-  clientName?: string;
-  user?: string;
-  targetType?: string;
-  /** Comma-separated `targetType:targetId` tuples, e.g. `bcdr-device:ABC123`. */
-  target?: string;
-  /** Look back this many `sinceUnits` from now. */
-  since?: number;
-  sinceUnits?: "days" | "hours" | "minutes";
-  page?: number;
-  perPage?: number;
-}
-
 export interface DattoSaasApiOptions {
   publicKey: string;
   secretKey: string;
@@ -306,22 +268,6 @@ export class DattoSaasApi {
     );
     if (Array.isArray(body)) return body;
     return body && typeof body === "object" ? [body] : [];
-  }
-
-  /** `GET /v1/report/activity-log` */
-  async listActivity(params: ActivityLogParams = {}): Promise<ActivityLogPage> {
-    // `_page` / `_perPage` are underscore-prefixed in Datto's contract.
-    const page = await this.get<ActivityLogPage>(ACTIVITY_LOG_PATH, {
-      clientName: params.clientName,
-      user: params.user,
-      targetType: params.targetType,
-      target: params.target,
-      since: params.since,
-      sinceUnits: params.sinceUnits,
-      _page: params.page,
-      _perPage: params.perPage,
-    });
-    return page ?? {};
   }
 
   // -------------------------------------------------------------------------

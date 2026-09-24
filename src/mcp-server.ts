@@ -144,29 +144,6 @@ export function createMcpServer(credentialOverrides?: DattoSaasCredentials): Ser
           },
         },
         {
-          name: "datto_saas_list_activity",
-          description:
-            "Read the Datto partner portal activity log (GET /v1/report/activity-log). This is the account-wide audit log across Datto products, filterable by client name, user and look-back window — not a SaaS-Protection-only feed.",
-          inputSchema: {
-            type: "object",
-            properties: {
-              clientName: { type: "string", description: "Partial/prefix match on client name" },
-              user: { type: "string", description: "Partial/prefix match on the acting user" },
-              since: {
-                type: "number",
-                description: "Look back this many sinceUnits from now (default 1)",
-              },
-              sinceUnits: {
-                type: "string",
-                enum: ["days", "hours", "minutes"],
-                description: "Units for `since` (default: days)",
-              },
-              page: { type: "number", description: "Page number (default 1)" },
-              perPage: { type: "number", description: "Results per page (default 25)" },
-            },
-          },
-        },
-        {
           name: "datto_saas_get_license_usage",
           description:
             "Seats used per customer, broken down by subscription, product type and retention. Derived from GET /v1/saas/domains — Datto publishes seats used, not seats purchased.",
@@ -404,18 +381,6 @@ export function createMcpServer(credentialOverrides?: DattoSaasCredentials): Ser
           return json(
             await api.getBackupReport(saasCustomerId, { daysUntil: params.daysUntil })
           );
-        }
-
-        case "datto_saas_list_activity": {
-          const params = (args ?? {}) as {
-            clientName?: string;
-            user?: string;
-            since?: number;
-            sinceUnits?: "days" | "hours" | "minutes";
-            page?: number;
-            perPage?: number;
-          };
-          return json(await api.listActivity(params));
         }
 
         case "datto_saas_get_license_usage": {
