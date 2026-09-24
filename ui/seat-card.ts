@@ -20,6 +20,7 @@
  * any customer's brand. No injection = neutral card with no brand identity.
  */
 import { App } from "@modelcontextprotocol/ext-apps";
+import { parseToolText } from "./parse-tool-text.js";
 
 interface Brand {
   name?: string;
@@ -149,7 +150,7 @@ app.ontoolresult = (result: { content?: Array<{ type: string; text?: string }> }
   const payload = (result.content ?? []).find((c) => c.type === "text");
   if (!payload?.text) return;
   try {
-    const card = extractCard(JSON.parse(payload.text));
+    const card = extractCard(parseToolText(payload.text));
     if (card) render(card);
   } catch {
     /* ignore malformed payloads */
