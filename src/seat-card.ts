@@ -135,9 +135,12 @@ export function buildSeatCard(
     card.seatType = SEAT_TYPE_LABELS[seat.seatType] ?? seat.seatType;
   }
 
-  // Datto sends `billable` as the string "1" / "0".
+  // Datto documents `billable` as the string "1" / "0", but the live API sends
+  // "1" and "" - an empty string for not billable (observed 2026-09-24; "0"
+  // never appeared). Both falsy forms map to "Not billable"; anything else
+  // shows no billing line rather than guessing.
   if (seat.billable === "1") card.billing = "Billable";
-  else if (seat.billable === "0") card.billing = "Not billable";
+  else if (seat.billable === "" || seat.billable === "0") card.billing = "Not billable";
 
   if (typeof seat.dateAdded === "string" && seat.dateAdded) {
     const parsed = new Date(seat.dateAdded);

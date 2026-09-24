@@ -165,7 +165,7 @@ export interface SaasSeat {
   name?: string;
   seatType?: string;
   seatState?: string;
-  /** `"1"` / `"0"` — a string in the live API, not a boolean. */
+  /** A string, not a boolean: `"1"` when billable, `""` when not (live, 2026-09-24 - Datto's docs say `"0"`, which never appeared). */
   billable?: string;
   dateAdded?: string;
   /** Microsoft/Google object id. */
