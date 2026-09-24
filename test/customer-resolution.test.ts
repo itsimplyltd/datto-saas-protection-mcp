@@ -11,12 +11,19 @@
  * Fix: only elicitSelection()'s own failure (a client with no elicitation
  * support) is caught and turned into null; api.listDomains() errors propagate
  * to the outer catch and surface as themselves.
+ *
+ * Also covers the null/""/undefined "no filter" normalisation on
+ * datto_saas_list_domains and datto_saas_get_license_usage, which used to
+ * check only `=== undefined` and so filtered everything out for `null` or
+ * `""` instead of treating them as "no filter" like resolveSaasCustomerId
+ * does.
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createMcpServer } from '../src/mcp-server.js';
+import { stripUntrustedContentWrapper } from '../src/utils/untrusted-content.js';
 
 const TEST_CREDS = { publicKey: 'pk', secretKey: 'sk' };
 
@@ -55,5 +62,23 @@ describe('resolveSaasCustomerId propagates real errors from listDomains', () => 
     const text = result.content[0]?.text ?? '';
     expect(text).toContain('401');
     expect(text).not.toContain('saasCustomerId is required');
+  });
+});
+
+describe('null/"" customer ids are treated as "no filter"', () => {
+  const DOMAINS = [
+    { domain: 'acme.co.nz', saasCustomerId: 111, saasCustomerName: 'Acme', seatsUsed: 5, productType: 'Office365' },
+    { domain: 'other.co.nz', saasCustomerId: 222, saasCustomerName: 'Other', seatsUsed: 3, productType: 'GoogleApps' },
+  ];
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('datto_saas_list_domains with saasCustomerId: "" returns every domain', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => respond(200, DOMAINS)));
+    const result = await callTool('datto_saas_list_domains', { saasCustomerId: '' });
+
+    expect(result.isError).toBeFalsy();
+    const payload = JSON.parse(stripUntrustedContentWrapper(result.content[0]?.text ?? '[]'));
+    expect(payload).toHaveLength(2);
   });
 });

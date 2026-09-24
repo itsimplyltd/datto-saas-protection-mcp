@@ -229,6 +229,16 @@ export function createMcpServer(credentialOverrides?: DattoSaasCredentials): Ser
   }
 
   /**
+   * `undefined`, `null` and `""` all mean "no filter supplied" - matching
+   * resolveSaasCustomerId's normalization above. A plain `=== undefined`
+   * check here used to let `null` or `""` (which an LLM caller can easily
+   * produce) filter every record out instead of returning everything.
+   */
+  function hasCustomerId(value: string | number | null | undefined): value is string | number {
+    return value !== undefined && value !== null && value !== "";
+  }
+
+  /**
    * Resolve the customer to act on, prompting from the real domain list when
    * the caller didn't supply one.
    */
@@ -311,10 +321,10 @@ export function createMcpServer(credentialOverrides?: DattoSaasCredentials): Ser
         }
 
         case "datto_saas_list_domains": {
-          const params = (args ?? {}) as { saasCustomerId?: string | number };
+          const { saasCustomerId } = (args ?? {}) as { saasCustomerId?: string | number | null };
           const domains = await api.listDomains();
-          if (params.saasCustomerId === undefined) return json(domains);
-          return json(domains.filter((d) => matchesCustomer(d, params.saasCustomerId!)));
+          if (!hasCustomerId(saasCustomerId)) return json(domains);
+          return json(domains.filter((d) => matchesCustomer(d, saasCustomerId)));
         }
 
         case "datto_saas_list_seats": {
@@ -409,12 +419,11 @@ export function createMcpServer(credentialOverrides?: DattoSaasCredentials): Ser
         }
 
         case "datto_saas_get_license_usage": {
-          const params = (args ?? {}) as { saasCustomerId?: string | number };
+          const { saasCustomerId } = (args ?? {}) as { saasCustomerId?: string | number | null };
           const domains = await api.listDomains();
-          const scoped =
-            params.saasCustomerId === undefined
-              ? domains
-              : domains.filter((d) => matchesCustomer(d, params.saasCustomerId!));
+          const scoped = hasCustomerId(saasCustomerId)
+            ? domains.filter((d) => matchesCustomer(d, saasCustomerId))
+            : domains;
           return json(deriveLicenseUsage(scoped));
         }
 
