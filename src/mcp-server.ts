@@ -352,7 +352,22 @@ export function createMcpServer(credentialOverrides?: DattoSaasCredentials): Ser
           const customerId = await resolveSaasCustomerId(api, saasCustomerId);
           if (customerId === null) return failure("Error: saasCustomerId is required.");
 
-          const seat = findSeat(await api.listSeats(customerId), seatId);
+          let seats;
+          try {
+            seats = await api.listSeats(customerId);
+          } catch (error) {
+            // Same Datto edge limit datto_saas_list_seats degrades on — but
+            // there is no count that answers "show me this seat", so this is
+            // a clear failure rather than a degraded success.
+            if (!isSeatListingUnavailable(error)) throw error;
+            return failure(
+              `Error: Datto cannot list seats for customer ${customerId} in time ` +
+                "(its seats endpoint times out above ~25-40 seats), so looking up a " +
+                "single seat is unavailable for this customer. datto_saas_list_seats " +
+                "still returns the customer's seat count."
+            );
+          }
+          const seat = findSeat(seats, seatId);
           if (!seat) {
             return failure(
               `Seat not found: no seat with mainId or remoteId "${seatId}" under customer ${customerId}.`
