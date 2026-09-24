@@ -178,9 +178,12 @@ describe('GET /v1/saas/domains', () => {
     await expect(api().listDomains()).resolves.toHaveLength(2);
   });
 
-  it('normalises a non-array body to an empty list', async () => {
+  it('rejects a non-array body instead of silently normalising to an empty list', async () => {
+    // Was: normalised to []. That made a real shape mismatch (a contract
+    // change, a proxy/WAF error page) indistinguishable from "no domains" -
+    // see test/response-shape.test.ts for the full behaviour this now has.
     fetchMock.mockResolvedValue(jsonResponse({ items: [DOMAIN_FIXTURE] }));
-    await expect(api().listDomains()).resolves.toEqual([]);
+    await expect(api().listDomains()).rejects.toThrow(/unexpected response shape/);
   });
 });
 

@@ -330,12 +330,21 @@ export class DattoSaasApi {
 
   /**
    * Datto returns bare JSON arrays for the SaaS collection routes (no envelope,
-   * no pagination). Anything else is normalised to `[]` so a tool never renders
-   * a stray object as if it were a list.
+   * no pagination). Anything else is a contract mismatch - a proxy/WAF error
+   * page, a maintenance page, a shape change - and throws rather than being
+   * silently normalised to `[]`, which used to make a real shape mismatch
+   * indistinguishable from "this customer has no records".
    */
   private async getArray<T>(path: string, query?: Record<string, QueryValue>): Promise<T[]> {
     const body = await this.get<T[]>(path, query);
-    return Array.isArray(body) ? body : [];
+    if (!Array.isArray(body)) {
+      throw new DattoSaasProtectionError(
+        `Datto returned an unexpected response shape for GET ${path} (expected a JSON array)`,
+        200,
+        body
+      );
+    }
+    return body;
   }
 
   private async get<T>(path: string, query?: Record<string, QueryValue>): Promise<T> {
@@ -354,7 +363,10 @@ export class DattoSaasApi {
 
     const contentType = response.headers.get("content-type") ?? "";
     if (!contentType.includes("application/json")) {
-      return undefined as T;
+      throw new DattoSaasProtectionError(
+        `Datto returned a non-JSON response for GET ${path}`,
+        response.status
+      );
     }
     try {
       return (await response.json()) as T;
