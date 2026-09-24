@@ -1,6 +1,6 @@
 {
   "name": "datto-saas-protection-mcp",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "private": true,
   "description": "Datto SaaS Protection MCP server for Claude — M365/GWS backup status, restores, seat management",
   "type": "module",

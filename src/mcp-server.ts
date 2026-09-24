@@ -24,6 +24,7 @@ import {
 import { elicitSelection } from "./utils/elicitation.js";
 import { SEAT_TYPES, isSeatListingUnavailable, type DattoSaasApi } from "./datto-api.js";
 import { deriveCustomers, deriveLicenseUsage, degradedSeatListing, findSeat, matchesCustomer } from "./derived.js";
+import { summariseBackupReport } from "./backup-report-summary.js";
 import {
   createClient,
   getCredentials,
@@ -130,7 +131,9 @@ export function createMcpServer(credentialOverrides?: DattoSaasCredentials): Ser
         {
           name: "datto_saas_get_backup_report",
           description:
-            "Get a customer's backup and storage report (GET /v1/saas/{saasCustomerId}/applications) — protected suites, application types and bytes used. Datto reports backup posture per customer, not per seat.",
+            "Get a customer's backup and storage report (GET /v1/saas/{saasCustomerId}/applications) — per-app (Exchange/OneDrive/SharePoint/Teams) counts of services backed up each day, plus bytes used. " +
+            "Datto's API has NO per-user or per-mailbox last-backup date — backup posture is reported per app per customer, not per seat. " +
+            "The result opens with an attention list (apps with a missed backup, a stale last-fully-protected time, or uningested services) followed by the per-app summary; the raw Datto report is included under `report`.",
           inputSchema: {
             type: "object",
             properties: {
@@ -378,9 +381,18 @@ export function createMcpServer(credentialOverrides?: DattoSaasCredentials): Ser
           };
           const saasCustomerId = await resolveSaasCustomerId(api, params.saasCustomerId);
           if (saasCustomerId === null) return failure("Error: saasCustomerId is required.");
-          return json(
-            await api.getBackupReport(saasCustomerId, { daysUntil: params.daysUntil })
+          const report = await api.getBackupReport(saasCustomerId, {
+            daysUntil: params.daysUntil,
+          });
+          // Attention list first, then the per-app summary — so "7 of 81
+          // mailboxes were not backed up in the last day" is obvious at a
+          // glance. `report` keeps the untouched Datto response so nothing
+          // that reads this tool's raw output today breaks.
+          const customers = summariseBackupReport(report);
+          const attention = customers.flatMap((customer) =>
+            customer.attention.map((entry) => `${entry.app}: ${entry.reason}`)
           );
+          return json({ attention, customers, report });
         }
 
         case "datto_saas_get_license_usage": {

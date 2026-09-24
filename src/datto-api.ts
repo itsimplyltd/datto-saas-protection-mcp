@@ -188,11 +188,68 @@ export interface Pagination {
   count?: number;
 }
 
+/**
+ * One entry in `backupHistory` — one day's backup outcome for an app type.
+ * `startTime`/`endTime` are as Datto sends them: `startTime` is the LATER of
+ * the two (the window's end-of-day), `endTime` the earlier — do not assume
+ * chronological order from the names.
+ */
+export interface BackupHistoryEntry {
+  /** e.g. "Between0dAnd1d", "Between1dAnd2d", ... newest window first in the array. */
+  timeWindow?: string;
+  /** Epoch ms. Later than `endTime` — see the interface note. */
+  startTime?: number;
+  /** Epoch ms. Earlier than `startTime`. */
+  endTime?: number;
+  totalServiceCount?: number;
+  activeServiceCount?: number;
+  activeServiceWithBackupCount?: number;
+  activeServiceWithPerfectBackupCount?: number;
+  /** "Perfect" | "Backup With Issues" | "Insufficient History" observed live; others are possible. */
+  status?: BackupHistoryStatus;
+}
+
+/** String union with a fallback so an unseen status still round-trips. */
+export type BackupHistoryStatus =
+  | "Perfect"
+  | "Backup With Issues"
+  | "Insufficient History"
+  | (string & {});
+
+/** One protected app (Exchange, OneDrive, SharePoint, Teams, ...) within a suite. */
+export interface BackupAppType {
+  /** e.g. "Office365Exchange", "Office365OneDrive", "Office365SharePoint", "Office365Teams". */
+  appType?: BackupAppTypeName;
+  /**
+   * Epoch ms when every service was last fully protected, OR a bucketed
+   * string (e.g. "OVER_10_DAYS_AGO") when Datto has no exact timestamp to
+   * give.
+   */
+  lastFullyProtectedTime?: number | string;
+  uningestedServiceCount?: number;
+  usedBytes?: number;
+  /** 10 entries, newest first. */
+  backupHistory?: BackupHistoryEntry[];
+}
+
+export type BackupAppTypeName =
+  | "Office365Exchange"
+  | "Office365OneDrive"
+  | "Office365SharePoint"
+  | "Office365Teams"
+  | (string & {});
+
+/** A protection suite (e.g. "Office365"), grouping one or more app types. */
+export interface BackupSuite {
+  suiteType?: string;
+  appTypes?: BackupAppType[];
+}
+
 export interface BackupReportItem {
   customerId?: number;
   customerName?: string;
   usedBytes?: number;
-  suites?: unknown[];
+  suites?: BackupSuite[];
 }
 
 export interface SaasBackupReport {
