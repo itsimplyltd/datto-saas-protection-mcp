@@ -238,11 +238,16 @@ export function createMcpServer(credentialOverrides?: DattoSaasCredentials): Ser
   ): Promise<string | number | null> {
     if (provided !== undefined && provided !== null && provided !== "") return provided;
 
+    // api.listDomains() errors (bad credentials, a timeout) propagate to the
+    // outer catch and surface as themselves - swallowing them here used to
+    // turn a 401 or a timeout into the misleading "saasCustomerId is
+    // required." Only elicitSelection()'s own failure (a client with no
+    // elicitation support) is caught, and only that returns null.
+    const customers = deriveCustomers(await api.listDomains());
+    if (customers.length === 0) return null;
+    if (customers.length === 1) return customers[0].saasCustomerId;
     try {
-      const customers = deriveCustomers(await api.listDomains());
-      if (customers.length === 0) return null;
-      if (customers.length === 1) return customers[0].saasCustomerId;
-      const picked = await elicitSelection(
+      return await elicitSelection(
         "Select a SaaS Protection customer:",
         "saasCustomerId",
         customers.slice(0, 25).map((c) => ({
@@ -252,7 +257,6 @@ export function createMcpServer(credentialOverrides?: DattoSaasCredentials): Ser
             : String(c.saasCustomerId),
         }))
       );
-      return picked;
     } catch {
       return null;
     }
