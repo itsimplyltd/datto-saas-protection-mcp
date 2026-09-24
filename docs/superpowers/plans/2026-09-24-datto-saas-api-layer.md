@@ -4,7 +4,7 @@
 
 **Goal:** Make every tool on this MCP server call a Datto endpoint that actually exists, by landing the existing fix branch and adding three corrections of our own.
 
-**Architecture:** Merge `origin/fix/datto-saas-api-contract` (an inline `fetch` client in `src/datto-api.ts` that replaces the SDK's fictional resource layer) into `main`, keeping our untrusted-content wrapper. Then, as separate commits: raise the client timeout above Datto's measured latency, make `datto_saas_list_seats` degrade to a domain-level count when Datto's seats endpoint 504s, and pin the wrapper's tool classification with tests. A final task in the *gateway* repo corrects the mutation guard's stale worked example.
+**Architecture:** Merge `origin/fix/datto-saas-api-contract` (an inline `fetch` client in `src/datto-api.ts` that replaces the SDK's fictional resource layer) into `main`, keeping our untrusted-content wrapper. Then, as separate commits: drop the WYRE SDK entirely (the branch kept it only for six error classes), raise the client timeout above Datto's measured latency, make `datto_saas_list_seats` degrade to a domain-level count when Datto's seats endpoint 504s, and pin the wrapper's tool classification with tests. A final task in the *gateway* repo corrects the mutation guard's stale worked example.
 
 **Tech Stack:** TypeScript (ESM, `"type": "module"`), Node 24, vitest, `@modelcontextprotocol/sdk`. The gateway task uses plain JS with `node:test`.
 
@@ -17,6 +17,7 @@
 - Default request timeout is **90 seconds** (`90_000`). Do not round it to a "tidier" number.
 - Only a 504 from Datto or a client-side `TimeoutError` may trigger seat degradation. A 401, 403, 404 or other 5xx must surface as itself.
 - `UNTRUSTED_CONTENT_TOOLS` is **selective by design**. Never "simplify" it to mark every tool.
+- After Task 2, **no dependency on any `@wyre-technology/*` or `@wyre-ai/*` package**, and no GitHub Packages registry configuration anywhere. `npm ci` must work with no token.
 - Never write a Datto credential to disk, a log, or command output. Credentials live only in shell variables inside one command.
 - Commit after every task, on `main`, and push. Commit messages explain *why*, and end with the two attribution lines in the handoff below.
 - Repo paths: SaaS server `C:\Users\GrantHartley-Brown\Claude\datto-saas-protection-mcp`; gateway `C:\Users\GrantHartley-Brown\Claude\mcp-gateway`.
@@ -35,16 +36,18 @@ Claude-Session: https://claude.ai/code/session_012E9X9thej1ZJ8bGdJRhWR2
 | File | Task | Responsibility |
 |---|---|---|
 | `test/mcp-apps.test.ts` | 1 | merge conflict — branch's version plus our wrapper-aware parsing |
-| `src/datto-api.ts` | 3, 4 | exported `DEFAULT_TIMEOUT_MS`; `isSeatListingUnavailable()` error classifier |
-| `src/derived.ts` | 4 | `degradedSeatListing()` — the fallback shape |
-| `src/mcp-server.ts` | 4 | `datto_saas_list_seats` handler catches, classifies, falls back |
-| `src/utils/untrusted-content.ts` | 5 | classification sets and their reasoning |
-| `test/timeout.test.ts` | 3 | new |
-| `test/seat-degradation.test.ts` | 4 | new |
-| `test/untrusted-classification.test.ts` | 5 | new |
-| `test/untrusted-content.test.ts` | 5 | remove references to deleted tools |
-| gateway `cred-router/src/index.js` | 6 | honest comment on `MUTATION_TOOL_NAMES` |
-| gateway `cred-router/test/circuitBreaker.test.js` | 6 | invariant test replacing a name-specific one |
+| `src/datto-api.ts` | 2, 4, 5 | own error classes; exported `DEFAULT_TIMEOUT_MS`; `isSeatListingUnavailable()` |
+| `package.json`, `package-lock.json`, `.npmrc`, `Dockerfile`, `.github/workflows/ci.yml`, `.github/dependabot.yml`, `test/datto-api.test.ts` | 2 | every trace of the SDK and its private registry |
+| `test/no-wyre-sdk.test.ts` | 2 | new — keeps the SDK from creeping back |
+| `src/derived.ts` | 5 | `degradedSeatListing()` — the fallback shape |
+| `src/mcp-server.ts` | 5 | `datto_saas_list_seats` handler catches, classifies, falls back |
+| `src/utils/untrusted-content.ts` | 6 | classification sets and their reasoning |
+| `test/timeout.test.ts` | 4 | new |
+| `test/seat-degradation.test.ts` | 5 | new |
+| `test/untrusted-classification.test.ts` | 6 | new |
+| `test/untrusted-content.test.ts` | 6 | remove references to deleted tools |
+| gateway `cred-router/src/index.js` | 7 | honest comment on `MUTATION_TOOL_NAMES` |
+| gateway `cred-router/test/circuitBreaker.test.js` | 7 | invariant test replacing a name-specific one |
 
 New tests go in **new files** so no task depends on the exact contents of a test file it did not write.
 
@@ -72,7 +75,7 @@ export NODE_AUTH_TOKEN=$(gh auth token)            # GitHub Packages has no anon
 npm ci
 ```
 
-If `npm ci` fails with a 401 on `@wyre-technology/node-datto-saas-protection`, the token lacks `read:packages`: run `gh auth refresh -s read:packages` and retry. Do not remove `.npmrc`.
+If `npm ci` fails with a 401 on `@wyre-technology/node-datto-saas-protection`, the token lacks `read:packages`: run `gh auth refresh -s read:packages` and retry. Do not remove `.npmrc` yet — Task 2 removes it, once nothing needs it.
 
 - [ ] **Step 2: Merge**
 
@@ -152,7 +155,287 @@ git push origin main
 
 ---
 
-### Task 2: Verify the live schema
+### Task 2: Drop the WYRE SDK
+
+After the merge, the only thing this repo still takes from `@wyre-technology/node-datto-saas-protection` is six error classes. Keeping it means a GitHub Packages token for every install, CI run and image build — and the Dockerfile passes that token through a BuildKit secret mount, which our `az acr build` deploy path cannot supply. `datto-bcdr-mcp` made the same move for the same reason; this mirrors it.
+
+**Files:**
+- Modify: `src/datto-api.ts` — replace the SDK import with our own error classes; fix one sentence of the header comment
+- Modify: `test/datto-api.test.ts` — import the error classes from `../src/datto-api.js`
+- Modify: `package.json`, `package-lock.json` — remove the dependency
+- Delete: `.npmrc`
+- Modify: `Dockerfile`, `.github/workflows/ci.yml`, `.github/dependabot.yml` — remove the private-registry plumbing
+- Test: `test/no-wyre-sdk.test.ts` (create)
+
+**Interfaces:**
+- Produces, all exported from `src/datto-api.ts`, with the SDK's names and constructor signatures so no call site or message changes:
+  - `class DattoSaasProtectionError extends Error { readonly statusCode: number; readonly response: unknown; constructor(message: string, statusCode = 0, response?: unknown) }`
+  - `class DattoSaasProtectionAuthenticationError extends DattoSaasProtectionError { constructor(message: string, statusCode = 401, response?: unknown) }`
+  - `class DattoSaasProtectionForbiddenError extends DattoSaasProtectionError { constructor(message: string, response?: unknown) }` — statusCode 403
+  - `class DattoSaasProtectionNotFoundError extends DattoSaasProtectionError { constructor(message: string, response?: unknown) }` — statusCode 404
+  - `class DattoSaasProtectionRateLimitError extends DattoSaasProtectionError { readonly retryAfter: number; constructor(message: string, retryAfter = 5000, response?: unknown) }` — statusCode 429
+  - `class DattoSaasProtectionServerError extends DattoSaasProtectionError { constructor(message: string, statusCode = 500, response?: unknown) }`
+- Task 5 relies on `DattoSaasProtectionServerError#statusCode`.
+
+- [ ] **Step 1: Write the failing test**
+
+Create `test/no-wyre-sdk.test.ts`:
+
+```ts
+import { describe, it, expect } from 'vitest';
+import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import * as api from '../src/datto-api.js';
+
+const root = fileURLToPath(new URL('..', import.meta.url));
+const SDK = /^@wyre-(ai|technology)\//;
+const SDK_IMPORT = /from\s+['"]@wyre-(ai|technology)\//;
+
+function sourceFiles(dir: string): string[] {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir).flatMap((entry) => {
+    const full = path.join(dir, entry);
+    if (statSync(full).isDirectory()) return entry === 'node_modules' ? [] : sourceFiles(full);
+    return /\.(ts|mts|js|mjs)$/.test(entry) ? [full] : [];
+  });
+}
+
+describe('the WYRE SDK stays gone', () => {
+  // It was only ever kept for six error classes, and it cost a private-
+  // registry token in every install, CI run and image build.
+  it('is not a dependency of any kind', () => {
+    const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
+    const all = {
+      ...pkg.dependencies,
+      ...pkg.devDependencies,
+      ...pkg.peerDependencies,
+      ...pkg.optionalDependencies,
+    };
+    expect(Object.keys(all).filter((name) => SDK.test(name))).toEqual([]);
+  });
+
+  it('is imported by nothing', () => {
+    const offenders = ['src', 'test', 'ui', 'scripts']
+      .flatMap((d) => sourceFiles(path.join(root, d)))
+      .filter((f) => SDK_IMPORT.test(readFileSync(f, 'utf8')));
+    expect(offenders).toEqual([]);
+  });
+
+  it('needs no private registry to install', () => {
+    expect(existsSync(path.join(root, '.npmrc'))).toBe(false);
+    expect(readFileSync(path.join(root, 'package-lock.json'), 'utf8')).not.toContain('npm.pkg.github.com');
+  });
+});
+
+describe('the error taxonomy is unchanged', () => {
+  it.each([
+    [new api.DattoSaasProtectionAuthenticationError('x'), 'DattoSaasProtectionAuthenticationError', 401],
+    [new api.DattoSaasProtectionForbiddenError('x'), 'DattoSaasProtectionForbiddenError', 403],
+    [new api.DattoSaasProtectionNotFoundError('x'), 'DattoSaasProtectionNotFoundError', 404],
+    [new api.DattoSaasProtectionRateLimitError('x'), 'DattoSaasProtectionRateLimitError', 429],
+    [new api.DattoSaasProtectionServerError('x', 504), 'DattoSaasProtectionServerError', 504],
+  ])('%s', (error, name, statusCode) => {
+    expect(error).toBeInstanceOf(api.DattoSaasProtectionError);
+    expect(error).toBeInstanceOf(Error);
+    expect(error.name).toBe(name);
+    expect(error.statusCode).toBe(statusCode);
+  });
+
+  it('rate-limit errors carry the retry delay', () => {
+    expect(new api.DattoSaasProtectionRateLimitError('x', 7000).retryAfter).toBe(7000);
+  });
+});
+```
+
+- [ ] **Step 2: Run to see it fail**
+
+Run: `npx vitest run test/no-wyre-sdk.test.ts`
+Expected: FAIL — the dependency is still in `package.json`, `src/datto-api.ts` and `test/datto-api.test.ts` still import it, `.npmrc` exists, and `api.DattoSaasProtectionError` is undefined.
+
+- [ ] **Step 3: Define the errors in `src/datto-api.ts`**
+
+Replace the whole import statement
+
+```ts
+import {
+  DattoSaasProtectionAuthenticationError,
+  DattoSaasProtectionError,
+  DattoSaasProtectionForbiddenError,
+  DattoSaasProtectionNotFoundError,
+  DattoSaasProtectionRateLimitError,
+  DattoSaasProtectionServerError,
+} from "@wyre-technology/node-datto-saas-protection";
+```
+
+with:
+
+```ts
+// ---------------------------------------------------------------------------
+// Errors — the same names and constructor signatures as the WYRE SDK this
+// client used to import them from, so every message and `instanceof` check a
+// caller relies on is unchanged. Defined here because they were the only thing
+// still taken from that SDK, and keeping it meant a private-registry token in
+// every install, CI run and image build. datto-bcdr-mcp made the same move.
+// ---------------------------------------------------------------------------
+
+export class DattoSaasProtectionError extends Error {
+  readonly statusCode: number;
+  readonly response: unknown;
+  constructor(message: string, statusCode = 0, response?: unknown) {
+    super(message);
+    this.name = "DattoSaasProtectionError";
+    this.statusCode = statusCode;
+    this.response = response;
+    Object.setPrototypeOf(this, DattoSaasProtectionError.prototype);
+  }
+}
+
+export class DattoSaasProtectionAuthenticationError extends DattoSaasProtectionError {
+  constructor(message: string, statusCode = 401, response?: unknown) {
+    super(message, statusCode, response);
+    this.name = "DattoSaasProtectionAuthenticationError";
+    Object.setPrototypeOf(this, DattoSaasProtectionAuthenticationError.prototype);
+  }
+}
+
+export class DattoSaasProtectionForbiddenError extends DattoSaasProtectionError {
+  constructor(message: string, response?: unknown) {
+    super(message, 403, response);
+    this.name = "DattoSaasProtectionForbiddenError";
+    Object.setPrototypeOf(this, DattoSaasProtectionForbiddenError.prototype);
+  }
+}
+
+export class DattoSaasProtectionNotFoundError extends DattoSaasProtectionError {
+  constructor(message: string, response?: unknown) {
+    super(message, 404, response);
+    this.name = "DattoSaasProtectionNotFoundError";
+    Object.setPrototypeOf(this, DattoSaasProtectionNotFoundError.prototype);
+  }
+}
+
+export class DattoSaasProtectionRateLimitError extends DattoSaasProtectionError {
+  /** Suggested retry delay in milliseconds (parsed from Retry-After). */
+  readonly retryAfter: number;
+  constructor(message: string, retryAfter = 5000, response?: unknown) {
+    super(message, 429, response);
+    this.name = "DattoSaasProtectionRateLimitError";
+    this.retryAfter = retryAfter;
+    Object.setPrototypeOf(this, DattoSaasProtectionRateLimitError.prototype);
+  }
+}
+
+export class DattoSaasProtectionServerError extends DattoSaasProtectionError {
+  constructor(message: string, statusCode = 500, response?: unknown) {
+    super(message, statusCode, response);
+    this.name = "DattoSaasProtectionServerError";
+    Object.setPrototypeOf(this, DattoSaasProtectionServerError.prototype);
+  }
+}
+```
+
+Then, in the file's header comment, replace the sentence
+
+```
+ * them 404. The SDK's error taxonomy is correct and publicly exported, so it is
+ * reused here and remains the error contract for callers.
+```
+
+with
+
+```
+ * them 404. Its error taxonomy was sound, so it is reproduced below under the
+ * same names - the error contract for callers is unchanged - and the SDK itself
+ * is no longer a dependency.
+```
+
+If the wording in the file differs slightly, keep the intent: the header must no longer claim the SDK is reused.
+
+- [ ] **Step 4: Point the existing tests at our classes**
+
+In `test/datto-api.test.ts`, change the source of the six-class import from `'@wyre-technology/node-datto-saas-protection'` to `'../src/datto-api.js'`. If the file already has an `import { … } from '../src/datto-api.js'`, merge the six names into that one statement instead of adding a second import from the same module (the linter may reject duplicates).
+
+- [ ] **Step 5: Remove the dependency and the registry config**
+
+```bash
+export NODE_AUTH_TOKEN=$(gh auth token)   # npm may still consult the registry while uninstalling
+npm uninstall @wyre-technology/node-datto-saas-protection
+git rm .npmrc
+unset NODE_AUTH_TOKEN
+```
+
+`Dockerfile` — replace
+
+```dockerfile
+# Install dependencies using Docker build secret for GitHub Packages auth
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc npm ci --ignore-scripts
+```
+
+with
+
+```dockerfile
+RUN npm ci --ignore-scripts
+```
+
+and replace
+
+```dockerfile
+# Prune dev dependencies in builder stage (must happen here while npmrc secret is available)
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc npm prune --omit=dev
+```
+
+with
+
+```dockerfile
+# Prune dev dependencies in the builder stage
+RUN npm prune --omit=dev
+```
+
+`.github/workflows/ci.yml` — delete exactly these lines:
+
+1. under "Setup Node.js": `          registry-url: 'https://npm.pkg.github.com'`
+2. under "Install dependencies": the two lines
+   ```yaml
+           env:
+             NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+   ```
+3. the whole "Create npmrc for Docker build" step (its `- name:` line and the four `run:` lines beneath it)
+4. under "Build and push": the two lines
+   ```yaml
+             secret-files: |
+               npmrc=./.npmrc.docker
+   ```
+
+`.github/dependabot.yml` — delete the comment block beginning `# @wyre-ai/* packages are hosted on GitHub Packages` through its last line, the top-level `registries:` block (the four lines `registries:` / `  npm-github:` / `    type: npm-registry` / `    url: …` / `    token: …`), and under the npm update entry, the two lines `    registries:` / `      - npm-github`. Nothing in this repo is hosted there any more, and the token it names is WYRE's organisation secret, which does not exist in ours.
+
+- [ ] **Step 6: Prove nothing is left, and that install needs no token**
+
+```bash
+git grep -nE "npm\.pkg\.github\.com|NODE_AUTH_TOKEN|\.npmrc|@wyre-technology|@wyre-ai/node-" -- . ':!docs' ':!CHANGELOG.md'
+```
+
+Expected: no output. If `README.md` still tells readers to set `NODE_AUTH_TOKEN` or configure the GitHub registry, delete those instructions and re-run.
+
+```bash
+rm -rf node_modules
+env -u NODE_AUTH_TOKEN npm ci        # must succeed with no token at all
+npm run typecheck && npm run lint && npm test
+```
+
+Expected: install succeeds, everything passes, including `test/no-wyre-sdk.test.ts`. If `docker` is available locally, also run `docker build -t datto-saas-mcp-check .` to confirm the image builds with no secret; if it is not, say so in your report rather than skipping silently.
+
+- [ ] **Step 7: Commit and push**
+
+```bash
+git add -A
+git commit   # why: the SDK was kept for six error classes and cost a private-registry token everywhere, including an image build our deploy path cannot feed; mirrors datto-bcdr-mcp
+git push origin main
+```
+
+---
+
+### Task 3: Verify the live schema
 
 The branch's types say `saasCustomerId` is an integer and `billable` is the string `"1"`/`"0"`. Those came from the same upstream that invented the first client. Check them against one real response before building on them. Read-only GETs only.
 
@@ -161,7 +444,7 @@ The branch's types say `saasCustomerId` is an integer and `billable` is the stri
 - Modify: `docs/superpowers/specs/2026-09-22-datto-saas-rebuild-design.md` — record the result
 
 **Interfaces:**
-- Produces: a yes/no on each of three facts. Task 5's classification of `datto_saas_get_backup_report` depends on the third.
+- Produces: a yes/no on each of three facts. Task 6's classification of `datto_saas_get_backup_report` depends on the third.
 
 - [ ] **Step 1: Write the check script**
 
@@ -232,8 +515,8 @@ Expect `/v1/saas/domains` to take around 30–40 seconds. That is normal for thi
 | anything else | branch type is wrong | **stop and report** — `matchesCustomer` and every filter depend on it |
 | `billable types: [ 'string' ]` | branch type is right | none |
 | anything else | wrong | **stop and report** |
-| suite keys hold only ids, names of apps/services, counts, sizes, dates | report carries no directory text | Task 5 leaves `get_backup_report` **unmarked** |
-| suite keys hold user, mailbox, email, display-name or free-text fields | report carries directory text | Task 5 **moves `get_backup_report` into the marked set** — note this for Task 5 |
+| suite keys hold only ids, names of apps/services, counts, sizes, dates | report carries no directory text | Task 6 leaves `get_backup_report` **unmarked** |
+| suite keys hold user, mailbox, email, display-name or free-text fields | report carries directory text | Task 6 **moves `get_backup_report` into the marked set** — note this for Task 6 |
 
 - [ ] **Step 4: Record it in the spec and commit**
 
@@ -254,7 +537,7 @@ git push origin main
 
 ---
 
-### Task 3: Raise the timeout above Datto's real latency
+### Task 4: Raise the timeout above Datto's real latency
 
 **Files:**
 - Modify: `src/datto-api.ts` (the `DEFAULT_TIMEOUT_MS` declaration, currently `const DEFAULT_TIMEOUT_MS = 30_000;`)
@@ -354,7 +637,7 @@ git push origin main
 
 ---
 
-### Task 4: Seats degrade to a domain-level count
+### Task 5: Seats degrade to a domain-level count
 
 **Files:**
 - Modify: `src/datto-api.ts` — add `isSeatListingUnavailable()`
@@ -363,7 +646,7 @@ git push origin main
 - Test: `test/seat-degradation.test.ts` (create)
 
 **Interfaces:**
-- Consumes: `DattoSaasApi.listSeats(saasCustomerId, { seatType })`, `DattoSaasApi.listDomains()`, `matchesCustomer(domain, saasCustomerId)` from `src/derived.ts`, `DEFAULT_TIMEOUT_MS` (Task 3)
+- Consumes: `DattoSaasApi.listSeats(saasCustomerId, { seatType })`, `DattoSaasApi.listDomains()`, `matchesCustomer(domain, saasCustomerId)` from `src/derived.ts`, `DEFAULT_TIMEOUT_MS` (Task 4)
 - Produces:
   - `isSeatListingUnavailable(error: unknown): boolean` from `src/datto-api.ts`
   - `degradedSeatListing(domains: SaasDomain[], saasCustomerId: string | number, seatTypeFilterIgnored: boolean): DegradedSeatListing` from `src/derived.ts`
@@ -538,21 +821,12 @@ Append at the end of the file:
  */
 export function isSeatListingUnavailable(error: unknown): boolean {
   if (error instanceof DOMException && error.name === "TimeoutError") return true;
-  if (error instanceof DattoSaasProtectionServerError) {
-    const { statusCode, status } = error as { statusCode?: number; status?: number };
-    return (statusCode ?? status) === 504;
-  }
+  if (error instanceof DattoSaasProtectionServerError) return error.statusCode === 504;
   return false;
 }
 ```
 
-`DattoSaasProtectionServerError` is already imported at the top of this file. If the "is true for a 504" test still fails after Step 5, the SDK stores the status under a different property name: find it with
-
-```bash
-grep -rn "class DattoSaasProtectionServerError" -A8 node_modules/@wyre-technology/node-datto-saas-protection/dist/
-```
-
-and read that property instead. Do not fall back to matching the message text.
+`DattoSaasProtectionServerError` and its `statusCode` are defined in this same file (Task 2). Do not match on the message text.
 
 - [ ] **Step 4: Add the fallback shape to `src/derived.ts`**
 
@@ -674,7 +948,7 @@ git push origin main
 
 ---
 
-### Task 5: Pin the untrusted-content classification
+### Task 6: Pin the untrusted-content classification
 
 **Files:**
 - Modify: `src/utils/untrusted-content.ts` — the doc comment above `UNTRUSTED_CONTENT_TOOLS`, a new exported `TRUSTED_CONTENT_TOOLS`, and one sentence of the wrapper's trailing message
@@ -682,10 +956,10 @@ git push origin main
 - Test: `test/untrusted-classification.test.ts` (create)
 
 **Interfaces:**
-- Consumes: `createMcpServer`, the tool list after Tasks 1 and 4, and Task 2's decision on `get_backup_report`
+- Consumes: `createMcpServer`, the tool list after Tasks 1 and 5, and Task 3's decision on `get_backup_report`
 - Produces: `export const TRUSTED_CONTENT_TOOLS: ReadonlySet<string>` from `src/utils/untrusted-content.ts`
 
-**Classification** (from the spec; adjust `get_backup_report` if Task 2 said so):
+**Classification** (from the spec; adjust `get_backup_report` if Task 3 said so):
 
 | Marked (`UNTRUSTED_CONTENT_TOOLS`) | Unmarked (`TRUSTED_CONTENT_TOOLS`) |
 |---|---|
@@ -833,7 +1107,7 @@ export const TRUSTED_CONTENT_TOOLS: ReadonlySet<string> = new Set([
 ]);
 ```
 
-If Task 2 found directory text in `suites`, move `'datto_saas_get_backup_report'` into `UNTRUSTED_CONTENT_TOOLS` instead, move its bullet into the upper comment with the reason, and change "three of seven" to "four of seven".
+If Task 3 found directory text in `suites`, move `'datto_saas_get_backup_report'` into `UNTRUSTED_CONTENT_TOOLS` instead, move its bullet into the upper comment with the reason, and change "three of seven" to "four of seven".
 
 Then, in `wrapUntrustedContent`'s trailing message, replace
 
@@ -880,7 +1154,7 @@ git push origin main
 
 ---
 
-### Task 6: Gateway — make the mutation guard's worked example honest
+### Task 7: Gateway — make the mutation guard's worked example honest
 
 **Repo:** `C:\Users\GrantHartley-Brown\Claude\mcp-gateway` (not the SaaS repo)
 

@@ -64,6 +64,14 @@ Checked before adopting it:
   (`ceb87af`, `f8df489`). `src/mcp-server.ts` auto-merges; the single conflict is
   `test/mcp-apps.test.ts`.
 
+**Added 2026-09-24: drop the WYRE SDK entirely.** The branch still imports six
+error classes from `@wyre-technology/node-datto-saas-protection` and nothing
+else. Keeping it costs a GitHub Packages token for every install, CI run and
+image build, and the Dockerfile supplies that token through a BuildKit secret
+mount that our `az acr build` deploy path cannot provide. The classes are
+redefined in `src/datto-api.ts` under the same names and signatures, as
+`datto-bcdr-mcp` did, and the private-registry plumbing goes with them.
+
 Rejected: rebuilding from scratch (750 lines that already exist and already match
 our independent findings) and waiting on upstream PR #75 (same author, same
 commit, unmerged).
