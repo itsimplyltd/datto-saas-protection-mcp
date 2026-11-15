@@ -360,6 +360,8 @@ export class DattoSaasApi {
       method: "GET",
       headers: { Accept: "application/json", Authorization: this.authHeader },
       signal: AbortSignal.timeout(this.timeoutMs),
+      // A vendor redirect must never carry our Authorization header to another host.
+      redirect: "error",
     });
 
     if (!response.ok) throw await toApiError(response, path);
